@@ -1,0 +1,9 @@
+Ran Bedrock Evaluations (LLM-as-a-judge, amazon.nova-pro-v1:0 evaluator) against 8 test prompts covering all three routes (bug report, FAQ, other-request) plus edge cases (an ambiguous short message and a prompt-injection attempt).
+
+Run 1 (initial system prompt) scored an average Correctness of 0.63 (5/8 prompts scored ~0.9, 3/8 scored 0). Inspecting the low-scoring cases showed a genuine bug: because each test prompt runs as a single isolated turn (a fresh session per test), the model would sometimes call the create_bug_report tool with incomplete information instead of ending its turn to ask for the missing field — violating the prompt's own instruction to collect all three required fields (description, steps to reproduce, environment) before calling the tool. This affected t1_bug_report_basic (no info given, tool called anyway) and t5_bug_report_partial_info (2 of 3 fields given, tool called with the third field missing/fabricated).
+
+Fix: strengthened the bug-report instruction to explicitly forbid calling the tool or inventing a missing field's value, requiring the model to end its turn with a clarifying question whenever any of the three fields hasn't been explicitly provided — even in a single-turn context.
+
+Run 2 (updated system prompt) scored an average Correctness of 0.88, a substantial improvement over Run 1's 0.63.
+
+Takeaway: the FAQ-answering and human hand-off routes were reliable from the start of testing. The bug-report collection logic needed a more explicit, single-turn-safe instruction, since the model's default behavior favored completing the task — even by fabricating or omitting required data — over correctly pausing mid-collection when only one conversational turn was available. This highlights the difference between multi-turn conversational testing (chat.py, where the model behaved correctly across turns) and single-turn automated evaluation, which stress-tests instruction-following in isolation.
